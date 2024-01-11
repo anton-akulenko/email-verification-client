@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "email-verification-client"
+version = "0.1.0"
+description = "Email verification client"
+authors = ["anton-akulenko <anton.htl@gmail.com>"]
+readme = "README.md"
+packages = [{include = "email_verification_client"}]
+
+[tool.poetry.scripts]
+email-verification-client = "email_verification_client.main:main"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+requests = "^2.31.0"
+wemake-python-styleguide = "^0.18.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+
