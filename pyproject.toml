@@ -12,6 +12,7 @@ email-verification-client = "email_verification_client.main:main"
 [tool.poetry.dependencies]
 python = "^3.10"
 requests = "^2.31.0"
+prompt-toolkit = "^3.0.43"
 wemake-python-styleguide = "^0.18.0"
 
 [build-system]

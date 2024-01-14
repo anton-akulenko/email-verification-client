@@ -1,132 +1,162 @@
 """This module contains functions for email and domain verification."""
 from typing import Dict, Any
-
 import requests
 import json
+import re
+from prompt_toolkit import prompt
+from prompt_toolkit.completion import WordCompleter
 
-API_KEY: str = '93072a33112358841b7225e00dd324382226106b'
+
+# API_KEY: str = '93072a33112358841b7225e00dd324382226106b'
+API_KEY: str = ''
+COMMANDS: list = ['verify', 'create', 'show_all', 'show_one', 'update', 'delete', 'exit']
+
+
+class EmailStorage:
+    def __init__(self):
+      
+        self.email_results: Dict[str, Dict[str, Any]] = {}
+
+    def save_email_result(self, email: str, result: Dict[str, Any]) -> None:
+        self.email_results[email] = result
+
+    def get_email_results(self) -> Dict[str, Dict[str, Any]]:
+        return self.email_results
+
+    def get_one(self, email: str) -> Dict[str, Any]:
+        return self.email_results.get(email)
+
+    def update_email_result(self, email: str, upd: Dict[str, Any]) -> None:
+        if email in self.email_results:
+            self.email_results[email] = upd
+
+    def create_email_result(self, email: str, upd: Dict[str, Any]) -> None:
+        if email not in self.email_results:
+            self.email_results[email] = upd
+
+    def delete_email_result(self, email: str) -> None:
+        if email in self.email_results:
+            del self.email_results[email]
+
 
 class HunterClient:
     def __init__(self, api_key: str = API_KEY, base_url: str = 'https://api.hunter.io/v2/'):
         self.api_key = api_key
         self.base_url = base_url
-        self.email_results: Dict[str, Dict[str, Any]] = {}
-        self.domain_results: Dict[str, Dict[str, Any]] = {}
-
+        self.storage = EmailStorage()  
+    
     def _make_request(self, url, payload):
-        r = requests.get(url, params=payload)
-        data = r.json()
-        # Raise error if not 200 OK
-        r.raise_for_status()
+        req_data = requests.get(url, params=payload)
+        data = req_data.json()
+        req_data.raise_for_status()
 
         return data
 
+    def is_valid_email(self, email: str) -> bool:
+        pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        if not bool(re.match(pattern, email)):
+            return print('Empty or invalid email format. Example: example@example.com')
+        return True
+
     def verify_email(self, email: str) -> Dict[str, Any]:
-        """Verify the provided email address."""
         url = f'{self.base_url}email-verifier'
         payload = {'api_key': self.api_key, 'email': email}
         try:
-            data = self._make_request(url, payload)
-            return data['data']['status'], data['meta']
-        except data.RequestException as error_msg:
-            return {'error': f'Request failed: {str(error_msg)}'}
+            return self._make_request(url, payload)
+        except requests.RequestException as error_msg:
+            return print({'error': f'Request failed: {str(error_msg)}'})
 
-    def save_email_result(self, email: str) -> str:
+    def save_email_result(self, email: str) -> None:
         try:
-            self.email_results[email] = self.verify_email(email)
-        except Exception as e:
-            print('Error during exist request: {}'.format(e))
-        return print(email, json.dumps(self.email_results[email], indent=2))
+            result = self.verify_email(email)
+            self.storage.save_email_result(email, result)
+            print(email, json.dumps(result, indent=2))
+        except Exception as err:
+            print('Error, exist : {}'.format(err))
 
     def get_email_results(self) -> Dict[str, Dict[str, Any]]:
-        return print(json.dumps(self.email_results, indent=2))
-    
-    def get_one(self, email: str) -> str:
-        """Get one Email results."""
-        if email in self.email_results:
-            return print(email, json.dumps(self.email_results[email], indent=2))
-        return print({'error': 'Email not found'})
+        return print(json.dumps(self.storage.get_email_results(), indent=2))
+        
+    def get_one(self, email: str) -> None:
+        result = self.storage.get_one(email)
+        if result:
+            print(email, json.dumps(result, indent=2))
+        else:
+            print({'error': 'Email not found'})
 
-    def update_email_result(self, email: str, upd: Dict[str, Any]) -> str:
-        """Update one Email results."""
-        if email in self.email_results:
-            self.email_results[email] = upd
-            print(f'Email: {email}  successfully updated!')
-            return print(json.dumps(self.email_results[email], indent=2))
+    def update_email_result(self, email: str, upd: Dict[str, Any]) -> None:
 
-        return print({'error': 'Email not found'})
+        self.storage.update_email_result(email, upd)
+        result = self.storage.get_one(email)
+        if result:
+            print('Email: {} successfully updated!'.format(email))
+            print(json.dumps(result, indent=2))
+        else:
+            print({'error': 'Email not found'})
 
-    def create_email_result(self, email: str, upd: Dict[str, Any]) -> str:
-        """Update one Email results."""
-        if email not in self.email_results:
-            self.email_results[email] = upd
-            print(f'Email: {email}  successfully created!')
-            return print(json.dumps(self.email_results[email], indent=2))
+    def create_email_result(self, email: str, upd: Dict[str, Any]) -> None:
+        self.storage.create_email_result(email, upd)
+        result = self.storage.get_one(email)
+        if result:
+            print('Email: {} successfully created!'.format(email))
+            print(json.dumps(result, indent=2))
+        else:
+            print('Email: {} already exists'.format(email))
 
-        return print(f'Email: {email} already exist')
-
-    def delete_email_result(self, email: str) -> str:
-        """Remove  Email results."""
-        if email in self.email_results:
-            removed_data = self.email_results.pop(email)
-            print(f'Email: {email} successfully deleted!')
-            return  print("Removed data: ", json.dumps(removed_data, indent=2))
-        return print('Email not found', email)
+    def delete_email_result(self, email: str) -> None:
+        result = self.storage.get_one(email)
+        if result:
+            self.storage.delete_email_result(email)
+            print('Email: {} successfully deleted!'.format(email))
+            print('Removed data: ', json.dumps(result, indent=2))
+        else:
+            print('Email: {} not found'.format(email))
 
 def main():
-    client = HunterClient()
-    print("Available commands (verify, create, show_all, show_one, update, delete):")
+    API_KEY: str = prompt('Please enter your API_KEY for hunter.io to continue: ')
+    client = HunterClient(API_KEY)
+    command_completer = WordCompleter(COMMANDS)
+    print('Available commands (verify, create, show_all, show_one, update, delete): ')
     while True:
-        command = input("Enter the number of the command: ")
-        if command == 'verify':
-            email = input("Enter email: ")
-            if email:
-                print('Checking if {} exists'.format(email))
-                client.save_email_result(email)
-            else:
-                print('email is required when using the verify command')
+        command = prompt('Enter the command: ', completer=command_completer)
+        match command:
+            case 'verify':
+                email = prompt('Enter email: ')
+                if client.is_valid_email(email):
+                    print('Checking if {} exists'.format(email))
+                    client.save_email_result(email)
 
-        elif command == 'create':
-            email = input("Enter email: ")
-            data = input("Enter data in format {'status': 'verified', 'some_data': 'some_data'...}: ")
-            if email:
-                client.create_email_result(email, data)
-            else:
-                print('email is required when using the create command')
+            case 'create':
+                email = prompt('Enter email: ')
+                data = prompt("Enter data in format {'status': 'verified', 'some_data': 'some_data'...}: ")
+                if client.is_valid_email(email):
+                    client.create_email_result(email, data)
 
-        elif command == 'show_all':
-            client.get_email_results()
+            case 'show_all':
+                client.get_email_results()
 
-        elif command == 'show_one':
-            email = input("Enter email: ")
-            if email:
-                client.get_one(email)
-            else:
-                print('email is required when using the show_one command')
+            case 'show_one':
+                email = prompt('Enter email: ')
+                if email:
+                    client.get_one(email)
 
-        elif command == 'update':
-            email = input("Enter email: ")
-            data = input("Enter data {'status': 'verified'}: ")
-            if email:
-                client.update_email_result(email, data)
-            else:
-                print('email is required when using the update command')
+            case 'update':
+                email = prompt('Enter email: ')
+                data = prompt("Enter data {'status': 'verified'}: ")
+                if client.is_valid_email(email):
+                    client.update_email_result(email, data)
 
-        elif command == 'delete':
-            email = input("Enter email: ")
-            if email:
-                client.delete_email_result(email)
-            else:
-                print('email is required when using the delete command')
-            
-        elif command == 'exit':
-            print("Bye!") 
-            break 
-        else:
-            print('Invalid command {}'.format(command))
+            case 'delete':
+                email = prompt('Enter email: ')
+                if client.is_valid_email(email):
+                    client.delete_email_result(email)
 
+            case 'exit':
+                print('Bye!') 
+                break
+            case _:
+                print(f'Invalid command \033[1m"{command}"\033[0m\nPlease enter a valid command: {", ".join(COMMANDS)}')
 
 
 if __name__ == '__main__':
     main()
-
